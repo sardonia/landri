@@ -34,25 +34,28 @@ pub struct DownloadDoneEvent {
 #[derive(Debug, Serialize, Clone)]
 pub struct GenTokenEvent {
     pub job_id: String,
+    pub state: GenState,
     pub chunk: String,
     pub total_chars: u64,
-    pub state: GenState,
+    pub elapsed_ms: u64,
 }
 
 #[derive(Debug, Serialize, Clone)]
 pub struct GenDoneEvent {
     pub job_id: String,
-    pub history_id: String,
+    pub state: GenState,
+    pub session_id: Option<String>,
     pub total_chars: u64,
     pub prompt_tokens: Option<u32>,
     pub completion_tokens: Option<u32>,
     pub total_tokens: Option<u32>,
-    pub state: GenState,
 }
 
 #[derive(Debug, Serialize, Clone)]
 pub struct ToastEvent {
+    pub title: String,
     pub message: String,
     pub detail: Option<String>,
     pub remediation: Option<String>,
+    pub kind: String,
 }

@@ -1,5 +1,5 @@
-use serde::Serialize;
-use tauri::Manager;
+use serde_json::Value;
+use tauri::Emitter;
 
 use crate::{
     error::{AppError, AppResult},
@@ -18,9 +18,9 @@ impl TauriEventEmitter {
 }
 
 impl EventsPort for TauriEventEmitter {
-    fn emit<T: Serialize + ?Sized>(&self, event: &str, payload: &T) -> AppResult<()> {
+    fn emit(&self, event: &str, payload: &Value) -> AppResult<()> {
         self.app
-            .emit_all(event, payload)
-            .map_err(|e| AppError::Internal(e.to_string()))
+            .emit(event, payload)
+            .map_err(|e: tauri::Error| AppError::Internal(e.to_string()))
     }
 }

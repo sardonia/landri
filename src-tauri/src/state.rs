@@ -71,10 +71,10 @@ impl AppState {
         let jobs = JobManager::new();
 
         let model_manager = Arc::new(ModelManager::new(
+            jobs.clone(),
             hf.clone(),
             registry_and_history.clone(),
             events.clone(),
-            jobs.clone(),
             paths.models_dir.clone(),
         ));
 

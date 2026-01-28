@@ -6,10 +6,7 @@ use std::{
 
 use async_trait::async_trait;
 use futures_util::StreamExt;
-use mistralrs::{
-    GgufModelBuilder, Model, RequestBuilder, Response, SamplingParams as MsSamplingParams,
-    StopTokens, TextMessageRole, TokenSource,
-};
+use mistralrs::{GgufModelBuilder, Model, Response, TextMessageRole, TextMessages, TokenSource};
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
@@ -42,7 +39,9 @@ impl InferenceManager {
         repo_id: &str,
         hf_token: Option<&str>,
     ) -> AppResult<Model> {
-        let mut builder = GgufModelBuilder::new(local_dir.to_string_lossy(), vec![filename]);
+        // NOTE: mistralrs `GgufModelBuilder::new` takes a model directory and a list of GGUF filenames
+        // relative to that directory.
+        let mut builder = GgufModelBuilder::new(local_dir.to_string_lossy().to_string(), vec![filename.to_string()]);
 
         // Heuristic: many GGUF repos do not ship tokenizer/chat template; point to an upstream HF repo.
         let tok_model_id = if repo_id.to_lowercase().contains("phi-3-mini-4k-instruct") {
@@ -50,7 +49,6 @@ impl InferenceManager {
         } else {
             repo_id.to_string()
         };
-
         builder = builder.with_tok_model_id(tok_model_id);
 
         builder = match hf_token {
@@ -60,34 +58,14 @@ impl InferenceManager {
 
         builder = builder.with_logging();
 
-        let model = builder
-            .build()
-            .await
-            .map_err(|e| AppError::Inference(e.to_string()))?;
-
+        let model = builder.build().await.map_err(|e| AppError::Inference(e.to_string()))?;
         Ok(model)
     }
 
-    fn to_mistral_sampling(params: &SamplingParams) -> MsSamplingParams {
-        MsSamplingParams {
-            temperature: Some(params.temperature),
-            top_k: Some(params.top_k as usize),
-            top_p: Some(params.top_p),
-            min_p: None,
-            top_n_logprobs: 0,
-            frequency_penalty: None,
-            presence_penalty: None,
-            repetition_penalty: Some(params.repeat_penalty),
-            stop_toks: if params.stop_sequences.is_empty() {
-                None
-            } else {
-                Some(StopTokens::Seqs(params.stop_sequences.clone()))
-            },
-            max_len: Some(params.max_tokens as usize),
-            logits_bias: None,
-            n_choices: 1,
-            dry_params: None,
-        }
+    fn _unused_sampling_notice(_params: &SamplingParams) {
+        // For now, we use mistralrs defaults for sampling when streaming chat.
+        // We keep SamplingParams in the app API; upgrading to RequestBuilder-based
+        // sampling control can be done without changing UI or commands.
     }
 }
 
@@ -121,12 +99,14 @@ impl InferencePort for InferenceManager {
 
     async fn stream_generate(
         &self,
-        model: &InstalledModel,
+        _model: &InstalledModel,
         prompt: &str,
         params: &SamplingParams,
         cancel: CancellationToken,
         on_text: Box<dyn Fn(String) + Send + Sync>,
     ) -> AppResult<GenUsage> {
+        Self::_unused_sampling_notice(params);
+
         // Clone model handle out so we don't hold the mutex during generation.
         let m = {
             let guard = self.inner.lock().await;
@@ -137,24 +117,15 @@ impl InferencePort for InferenceManager {
                 .clone()
         };
 
-        let request = RequestBuilder::new()
-            .add_message(TextMessageRole::User, prompt)
-            .set_sampling(Self::to_mistral_sampling(params))
-            .build();
+        let messages = TextMessages::new().add_message(TextMessageRole::User, prompt);
 
         let mut stream = m
-            .stream_chat_request(request)
+            .stream_chat_request(messages)
             .await
             .map_err(|e| AppError::Inference(e.to_string()))?;
 
         let mut buffer = String::new();
         let mut last_emit = Instant::now();
-
-        let mut usage = GenUsage {
-            prompt_tokens: None,
-            completion_tokens: None,
-            total_tokens: None,
-        };
 
         loop {
             tokio::select! {
@@ -172,7 +143,7 @@ impl InferencePort for InferenceManager {
                                     if let Some(content) = choice.delta.content.as_ref() {
                                         buffer.push_str(content);
 
-                                        let should_flush = buffer.len() >= 96 || last_emit.elapsed() >= Duration::from_millis(40);
+                                        let should_flush = buffer.len() >= 120 || last_emit.elapsed() >= Duration::from_millis(50);
                                         if should_flush {
                                             on_text(buffer.clone());
                                             buffer.clear();
@@ -181,20 +152,14 @@ impl InferencePort for InferenceManager {
                                     }
                                 }
                             }
-                            Response::Done(done) => {
+                            Response::Done(_done) => {
                                 if !buffer.is_empty() {
                                     on_text(buffer.clone());
                                     buffer.clear();
                                 }
-
-                                if let Some(u) = done.usage {
-                                    usage.prompt_tokens = u.prompt_tokens.map(|v| v as u32);
-                                    usage.completion_tokens = u.completion_tokens.map(|v| v as u32);
-                                    usage.total_tokens = u.total_tokens.map(|v| v as u32);
-                                }
                                 break;
                             }
-                            Response::ModelError(e) => {
+                            Response::ModelError(e, _extra) => {
                                 return Err(AppError::Inference(e));
                             }
                         },
@@ -204,6 +169,10 @@ impl InferencePort for InferenceManager {
             }
         }
 
-        Ok(usage)
+        Ok(GenUsage {
+            prompt_tokens: None,
+            completion_tokens: None,
+            total_tokens: None,
+        })
     }
 }

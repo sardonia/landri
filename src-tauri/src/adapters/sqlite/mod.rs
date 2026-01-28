@@ -204,8 +204,6 @@ impl HistoryPort for SqliteStore {
                         id: row.get(0)?,
                         created_at: row.get(1)?,
                         model_key: row.get(2)?,
-                        repo_id: row.get(3)?,
-                        filename: row.get(4)?,
                         prompt_preview: truncate_preview(&prompt, 120),
                         output_preview: truncate_preview(&output, 140),
                         total_tokens: row.get::<_, Option<i64>>(7)?.map(|v| v as u32),
@@ -284,6 +282,18 @@ impl HistoryPort for SqliteStore {
                 ],
             )
             .map_err(|e| AppError::Db(e.to_string()))?;
+            Ok(())
+        })
+        .await
+        .map_err(|e| AppError::Db(e.to_string()))?
+    }
+
+
+    async fn clear_history(&self) -> AppResult<()> {
+        let path = self.db_path.clone();
+        tokio::task::spawn_blocking(move || {
+            let conn = rusqlite::Connection::open(path.as_ref()).map_err(|e| AppError::Db(e.to_string()))?;
+            conn.execute("DELETE FROM history", []).map_err(|e| AppError::Db(e.to_string()))?;
             Ok(())
         })
         .await

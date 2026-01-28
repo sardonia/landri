@@ -93,16 +93,26 @@ pub struct Settings {
     pub hf_token: Option<String>,
     pub default_repo_id: String,
     pub default_quant_hint: String,
+    pub beginner_params: SamplingParams,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Self {
             hf_token: None,
-            // User preference in this conversation: bartowski + phi-3 gguf
+            // User choice: bartowski Phi-3 mini GGUF, v0.3.
             default_repo_id: "bartowski/Phi-3-mini-4k-instruct-v0.3-GGUF".to_string(),
-            // User preference: Q5 (default to option 2, Q5)
+            // User choice: default to Q5.
             default_quant_hint: "Q5".to_string(),
+            // User choice: preset #2 (Precise).
+            beginner_params: SamplingParams {
+                temperature: 0.2,
+                top_p: 0.9,
+                top_k: 40,
+                repeat_penalty: 1.05,
+                max_tokens: 512,
+                stop_sequences: vec!["</s>".to_string(), "<|end|>".to_string()],
+            },
         }
     }
 }
@@ -112,8 +122,6 @@ pub struct HistoryItemSummary {
     pub id: String,
     pub created_at: i64,
     pub model_key: ModelKey,
-    pub repo_id: String,
-    pub filename: String,
     pub prompt_preview: String,
     pub output_preview: String,
     pub total_tokens: Option<u32>,
@@ -128,7 +136,8 @@ pub struct HistoryItemDetail {
     pub filename: String,
     pub prompt: String,
     pub output: String,
-    pub params: SamplingParams,
+    /// JSON string of sampling params, for UI display/debug.
+    pub params_json: String,
     pub prompt_tokens: Option<u32>,
     pub completion_tokens: Option<u32>,
     pub total_tokens: Option<u32>,

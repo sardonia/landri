@@ -58,7 +58,7 @@ impl ModelOrchestrator {
 
     pub async fn start_download(&self, repo_id: &str, filename: &str, hf_token: Option<&str>) -> AppResult<String> {
         self.model_manager
-            .start_download(repo_id, filename, hf_token)
+            .start_download(repo_id.to_string(), filename.to_string(), hf_token.map(|s| s.to_string()))
             .await
     }
 

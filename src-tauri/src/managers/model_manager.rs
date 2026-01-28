@@ -12,7 +12,7 @@ use crate::{
     error::{AppError, AppResult},
     events::{DownloadDoneEvent, DownloadProgressEvent, ToastEvent, EVENT_DOWNLOAD_DONE, EVENT_DOWNLOAD_PROGRESS, EVENT_TOAST_ERROR, EVENT_TOAST_INFO},
     managers::job_manager::JobManager,
-    ports::{events::EventsPort, hf::HuggingFacePort, registry::ModelRegistryPort},
+    ports::{events::{EventsPort, emit_ser}, hf::HuggingFacePort, registry::ModelRegistryPort},
 };
 
 /// Actor-ish manager responsible for downloads + verification + registry updates.
@@ -68,17 +68,21 @@ impl ModelManager {
             if let Err(err) = res {
                 let toast = match err {
                     AppError::Cancelled => ToastEvent {
-                        message: "Download cancelled".to_string(),
+                        title: "Download cancelled".to_string(),
+                        message: "The download was cancelled.".to_string(),
                         detail: Some(format!("{repo_id} / {filename}")),
                         remediation: Some("You can restart the download any time.".to_string()),
+                        kind: "info".to_string(),
                     },
                     _ => ToastEvent {
-                        message: "Download failed".to_string(),
+                        title: "Download failed".to_string(),
+                        message: "Unable to download the model.".to_string(),
                         detail: Some(err.to_string()),
                         remediation: Some("Check your internet connection and (if needed) your Hugging Face token in Settings.".to_string()),
+                        kind: "error".to_string(),
                     },
                 };
-                let _ = events.emit(EVENT_TOAST_ERROR, &toast);
+                let _ = emit_ser(events.as_ref(), EVENT_TOAST_ERROR, &toast);
             }
 
             jm.remove(&job_id).await;
@@ -160,7 +164,7 @@ async fn download_flow(
                                         percent,
                                         state: ModelState::Downloading,
                                     };
-                                    let _ = events_reporter.emit(EVENT_DOWNLOAD_PROGRESS, &evt);
+                                    let _ = emit_ser(events_reporter.as_ref(), EVENT_DOWNLOAD_PROGRESS, &evt);
                                     last_emit = Instant::now();
                                 }
                             }
@@ -178,7 +182,7 @@ async fn download_flow(
                                     percent,
                                     state: ModelState::Downloading,
                                 };
-                                let _ = events_reporter.emit(EVENT_DOWNLOAD_PROGRESS, &evt);
+                                let _ = emit_ser(events_reporter.as_ref(), EVENT_DOWNLOAD_PROGRESS, &evt);
                             }
                             break;
                         }
@@ -218,7 +222,7 @@ async fn download_flow(
         percent: Some(100.0),
         state: ModelState::Verifying,
     };
-    let _ = events.emit(EVENT_DOWNLOAD_PROGRESS, &verify_evt);
+    let _ = emit_ser(events.as_ref(), EVENT_DOWNLOAD_PROGRESS, &verify_evt);
 
     if written_bytes == 0 {
         let _ = fs::remove_file(&temp_path).await;
@@ -257,14 +261,16 @@ async fn download_flow(
         size_bytes: installed.size_bytes,
         verified: installed.verified,
     };
-    events.emit(EVENT_DOWNLOAD_DONE, &done)?;
+    emit_ser(events.as_ref(), EVENT_DOWNLOAD_DONE, &done)?;
 
     let toast = ToastEvent {
-        message: "Model installed".to_string(),
+        title: "Model installed".to_string(),
+        message: "The model is ready to use.".to_string(),
         detail: Some(format!("{} ({})", installed.repo_id, installed.filename)),
         remediation: Some("Select it as your Active Model and try a prompt.".to_string()),
+        kind: "info".to_string(),
     };
-    let _ = events.emit(EVENT_TOAST_INFO, &toast);
+    let _ = emit_ser(events.as_ref(), EVENT_TOAST_INFO, &toast);
 
     Ok(())
 }

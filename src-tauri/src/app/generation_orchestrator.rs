@@ -1,12 +1,12 @@
 use std::{
     sync::{Arc, Mutex},
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 use uuid::Uuid;
 
 use crate::{
-    domain::{GenState, GenerateRequest, HistoryItemDetail, SamplingParams},
+    domain::{GenState, GenerateRequest, HistoryItemDetail},
     error::{AppError, AppResult},
     events::{
         GenDoneEvent, GenTokenEvent, ToastEvent, EVENT_GEN_DONE, EVENT_GEN_TOKEN, EVENT_TOAST_ERROR,
@@ -14,6 +14,7 @@ use crate::{
     },
     managers::job_manager::JobManager,
     ports::{
+        events::emit_ser,
         events::EventsPort,
         history::HistoryPort,
         inference::InferencePort,
@@ -59,10 +60,10 @@ impl GenerationOrchestrator {
             .ok_or_else(|| AppError::InvalidInput("Selected model is not installed.".to_string()))?;
 
         let (job_id, cancel) = self.jobs.create_job().await;
+
         let events = self.events.clone();
         let history = self.history.clone();
         let inference = self.inference.clone();
-        let registry = self.registry.clone();
         let jobs = self.jobs.clone();
 
         let params = req.params.clone();
@@ -70,33 +71,39 @@ impl GenerationOrchestrator {
         let model_key = req.model_key.clone();
 
         tokio::spawn(async move {
-            let _ = events.emit(
+            let started_at = Instant::now();
+
+            let _ = emit_ser(
+                events.as_ref(),
                 EVENT_TOAST_INFO,
                 &ToastEvent {
                     title: "Generating".to_string(),
                     message: "Preparing model and starting generation…".to_string(),
+                    detail: None,
                     remediation: None,
+                    kind: "info".to_string(),
                 },
             );
 
-            let started_at = Instant::now();
             let output_buf: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));
             let total_chars: Arc<Mutex<u64>> = Arc::new(Mutex::new(0));
 
             // Ensure model loaded.
-            let prep_res = inference.ensure_model_loaded(&installed, hf_token).await;
-            if let Err(e) = prep_res {
-                let _ = events.emit(
+            if let Err(e) = inference.ensure_model_loaded(&installed, hf_token).await {
+                let _ = emit_ser(
+                    events.as_ref(),
                     EVENT_TOAST_ERROR,
                     &ToastEvent {
                         title: "Model load failed".to_string(),
                         message: e.to_string(),
+                        detail: Some(format!("{} / {}", installed.repo_id, installed.filename)),
                         remediation: Some(
-                            "Make sure the model file is valid, and set a Hugging Face token in Settings if the repo is gated.".to_string(),
+                            "Make sure the GGUF file is valid, and set a Hugging Face token in Settings if the repo is gated.".to_string(),
                         ),
+                        kind: "error".to_string(),
                     },
                 );
-                let _ = jobs.remove_job(&job_id).await;
+                jobs.remove(&job_id).await;
                 return;
             }
 
@@ -104,6 +111,8 @@ impl GenerationOrchestrator {
             let output_buf2 = output_buf.clone();
             let total_chars2 = total_chars.clone();
             let job_id2 = job_id.clone();
+            let started_at2 = started_at;
+
             let on_text = Box::new(move |chunk: String| {
                 // Accumulate output.
                 {
@@ -115,13 +124,16 @@ impl GenerationOrchestrator {
                     }
                 }
 
-                let _ = events2.emit(
+                let total_now = total_chars2.lock().map(|t| *t).unwrap_or(0);
+                let _ = emit_ser(
+                    events2.as_ref(),
                     EVENT_GEN_TOKEN,
                     &GenTokenEvent {
                         job_id: job_id2.clone(),
-                        chunk,
-                        total_chars: total_chars2.lock().map(|t| *t).unwrap_or(0),
                         state: GenState::Generating,
+                        chunk,
+                        total_chars: total_now,
+                        elapsed_ms: started_at2.elapsed().as_millis() as u64,
                     },
                 );
             });
@@ -154,15 +166,15 @@ impl GenerationOrchestrator {
 
                     let _ = history.insert_history(&item).await;
 
-                    let total_chars = total_chars.lock().map(|t| *t).unwrap_or(0);
-                    let _ = events.emit(
+                    let total_now = total_chars.lock().map(|t| *t).unwrap_or(0);
+                    let _ = emit_ser(
+                        events.as_ref(),
                         EVENT_GEN_DONE,
                         &GenDoneEvent {
                             job_id: job_id.clone(),
-                            session_id: Some(session_id),
                             state: GenState::Done,
-                            total_chars,
-                            elapsed_ms: started_at.elapsed().as_millis() as u64,
+                            session_id: Some(session_id),
+                            total_chars: total_now,
                             prompt_tokens: usage.prompt_tokens,
                             completion_tokens: usage.completion_tokens,
                             total_tokens: usage.total_tokens,
@@ -170,15 +182,15 @@ impl GenerationOrchestrator {
                     );
                 }
                 Err(AppError::Cancelled) => {
-                    let total_chars = total_chars.lock().map(|t| *t).unwrap_or(0);
-                    let _ = events.emit(
+                    let total_now = total_chars.lock().map(|t| *t).unwrap_or(0);
+                    let _ = emit_ser(
+                        events.as_ref(),
                         EVENT_GEN_DONE,
                         &GenDoneEvent {
                             job_id: job_id.clone(),
-                            session_id: None,
                             state: GenState::Cancelled,
-                            total_chars,
-                            elapsed_ms: started_at.elapsed().as_millis() as u64,
+                            session_id: None,
+                            total_chars: total_now,
                             prompt_tokens: None,
                             completion_tokens: None,
                             total_tokens: None,
@@ -186,25 +198,29 @@ impl GenerationOrchestrator {
                     );
                 }
                 Err(e) => {
-                    let _ = events.emit(
+                    let _ = emit_ser(
+                        events.as_ref(),
                         EVENT_TOAST_ERROR,
                         &ToastEvent {
                             title: "Generation failed".to_string(),
                             message: e.to_string(),
+                            detail: None,
                             remediation: Some(
-                                "Try a smaller model/quantization, lower max tokens, or ensure your system has enough RAM.".to_string(),
+                                "Try a smaller quantization, lower max tokens, or ensure your system has enough RAM.".to_string(),
                             ),
+                            kind: "error".to_string(),
                         },
                     );
-                    let total_chars = total_chars.lock().map(|t| *t).unwrap_or(0);
-                    let _ = events.emit(
+
+                    let total_now = total_chars.lock().map(|t| *t).unwrap_or(0);
+                    let _ = emit_ser(
+                        events.as_ref(),
                         EVENT_GEN_DONE,
                         &GenDoneEvent {
                             job_id: job_id.clone(),
-                            session_id: None,
                             state: GenState::Failed,
-                            total_chars,
-                            elapsed_ms: started_at.elapsed().as_millis() as u64,
+                            session_id: None,
+                            total_chars: total_now,
                             prompt_tokens: None,
                             completion_tokens: None,
                             total_tokens: None,
@@ -213,7 +229,7 @@ impl GenerationOrchestrator {
                 }
             }
 
-            let _ = jobs.remove_job(&job_id).await;
+            jobs.remove(&job_id).await;
         });
 
         Ok(job_id)

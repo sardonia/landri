@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Landri",
+  "productName": "Landry",
   "version": "0.1.0",
-  "identifier": "com.landri.app",
+  "identifier": "com.landry.app",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Landri",
+        "title": "Landry",
         "width": 1280,
         "height": 800,
         "resizable": true,
@@ -23,7 +23,7 @@
       "csp": null
     }
   },
-    "bundle": {
+  "bundle": {
     "active": true,
     "targets": "all",
     "icon": [

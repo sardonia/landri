@@ -11,6 +11,7 @@ mod state;
 mod tauri_api;
 
 use state::AppState;
+use tauri::Manager;
 
 fn main() {
     tracing_subscriber::fmt()

@@ -57,7 +57,7 @@ pub async fn download_model(
 
 #[tauri::command]
 pub async fn cancel_job(state: State<'_, AppState>, job_id: String) -> Result<bool, String> {
-    Ok(state.jobs.cancel_job(&job_id).await)
+    Ok(state.jobs.cancel(&job_id).await)
 }
 
 #[tauri::command]
@@ -76,8 +76,8 @@ pub async fn get_settings(state: State<'_, AppState>) -> Result<Settings, String
 }
 
 #[tauri::command]
-pub async fn set_settings(state: State<'_, AppState>, settings: Settings) -> Result<(), String> {
-    state.update_settings(settings).await.map_err(to_err)
+pub async fn set_settings(state: State<'_, AppState>, settings: Settings) -> Result<bool, String> {
+    state.update_settings(settings).await.map(|_| true).map_err(to_err)
 }
 
 #[tauri::command]
