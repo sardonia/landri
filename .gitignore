@@ -1,0 +1,66 @@
+# ================================
+# Nerelith (Tauri + Rust + Vite/TS)
+# .gitignore
+# ================================
+
+# --- Git internals ---
+.git/
+
+# --- Node / JS ---
+node_modules/
+dist/
+.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log* 
+pnpm-debug.log*
+*.log
+
+# --- Rust / Cargo ---
+target/
+**/*.rs.bk
+
+# --- Tauri (Rust build output) ---
+src-tauri/target/
+
+# --- Resources (EXCLUDE ALL, per your request) ---
+resources/
+src-tauri/resources/
+
+# --- OS junk ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100/
+.Trashes/
+
+# --- Windows junk ---
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# --- IDEs / editors ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- Env / secrets ---
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+
+# --- Optional: lock down large model artifacts anywhere ---
+*.gguf
+*.ggml
+*.bin
+*.safetensors
+*.onnx
+
+Cargo.toml
+Cargo.lock
