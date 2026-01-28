@@ -2,42 +2,290 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="stylesheet" href="/src/styles.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tauri App</title>
-    <script type="module" src="/src/main.ts" defer></script>
+    <title>Landry</title>
   </head>
-
   <body>
-    <main class="container">
-      <h1>Welcome to Tauri</h1>
+    <div id="app" class="app-shell">
+      <div class="bg-orb orb-a"></div>
+      <div class="bg-orb orb-b"></div>
+      <div class="bg-noise"></div>
 
-      <div class="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/src/assets/vite.svg" class="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img
-            src="/src/assets/tauri.svg"
-            class="logo tauri"
-            alt="Tauri logo"
-          />
-        </a>
-        <a href="https://www.typescriptlang.org/docs" target="_blank">
-          <img
-            src="/src/assets/typescript.svg"
-            class="logo typescript"
-            alt="typescript logo"
-          />
-        </a>
-      </div>
-      <p>Click on the Tauri logo to learn more about the framework</p>
+      <header class="topbar frame">
+        <div class="brand">
+          <div class="brand__icon" aria-hidden="true">
+            <!-- gemstone icon -->
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 2l7 7-7 13L5 9l7-7Z" stroke="var(--gold-2)" stroke-width="1.2"/>
+              <path d="M12 2v20" stroke="var(--gold-1)" stroke-width="1" opacity="0.55"/>
+              <path d="M5 9h14" stroke="var(--gold-1)" stroke-width="1" opacity="0.45"/>
+            </svg>
+          </div>
+          <div class="brand__text">
+            <div class="brand__name">Landry</div>
+            <div class="brand__tag">LLM Playground for Beginners</div>
+          </div>
+        </div>
 
-      <form class="row" id="greet-form">
-        <input id="greet-input" placeholder="Enter a name..." />
-        <button type="submit">Greet</button>
-      </form>
-      <p id="greet-msg"></p>
-    </main>
+        <nav class="nav" aria-label="Main">
+          <button class="nav__item" data-nav="home" aria-current="page">
+            <span class="nav__icon" aria-hidden="true">⌂</span>
+            Home
+          </button>
+          <button class="nav__item" data-nav="history">
+            <span class="nav__icon" aria-hidden="true">⟲</span>
+            History
+          </button>
+          <button class="nav__item" data-nav="settings">
+            <span class="nav__icon" aria-hidden="true">⚙</span>
+            Settings
+          </button>
+        </nav>
+
+        <div class="user">
+          <div class="user__avatar" aria-hidden="true"></div>
+          <div class="user__text">
+            <div class="user__welcome">Welcome, User</div>
+          </div>
+          <div class="user__chev" aria-hidden="true">▾</div>
+        </div>
+      </header>
+
+      <main class="main">
+        <section id="screen-home" class="screen screen--active">
+          <div class="grid3">
+            <!-- LEFT: Model download -->
+            <aside class="panel frame" aria-label="Download Model">
+              <div class="panel__header">
+                <div>
+                  <div class="panel__title">Download Model from Hugging Face</div>
+                  <div class="panel__subtitle">Pick a beginner-friendly GGUF model and install it locally.</div>
+                </div>
+              </div>
+
+              <div class="field">
+                <label class="label" for="hf-search">Search</label>
+                <div class="row">
+                  <input id="hf-search" class="input" placeholder="Try: phi-3, mistral, llama…" />
+                  <button id="hf-search-btn" class="btn btn--ghost">Browse Models</button>
+                </div>
+              </div>
+
+              <div class="field">
+                <label class="label" for="hf-model-select">Select an AI Model</label>
+                <select id="hf-model-select" class="select"></select>
+                <div id="hf-model-meta" class="muted"></div>
+              </div>
+
+              <div class="field">
+                <label class="label" for="hf-file-select">GGUF File / Quantization</label>
+                <select id="hf-file-select" class="select"></select>
+                <div class="muted">Tip: Q5 is a great default (quality vs speed).</div>
+              </div>
+
+              <div class="row">
+                <button id="hf-download-btn" class="btn btn--primary">Download &amp; Install</button>
+                <button id="hf-cancel-btn" class="btn btn--ghost" disabled>Cancel</button>
+              </div>
+
+              <div class="field">
+                <div class="row row--between">
+                  <div class="label">Download Progress</div>
+                  <div id="dl-status" class="badge">Idle</div>
+                </div>
+                <div class="progress">
+                  <div id="dl-bar" class="progress__bar" style="width:0%"></div>
+                </div>
+                <div id="dl-meta" class="muted">—</div>
+              </div>
+
+              <div class="divider"></div>
+
+              <div class="field">
+                <div class="row row--between">
+                  <div>
+                    <div class="label">Installed Models</div>
+                    <div class="muted">Choose an installed model to generate.</div>
+                  </div>
+                  <button id="refresh-installed" class="btn btn--tiny btn--ghost">Refresh</button>
+                </div>
+                <select id="installed-select" class="select"></select>
+                <div id="installed-meta" class="muted"></div>
+              </div>
+            </aside>
+
+            <!-- CENTER: Prompt -->
+            <section class="panel frame" aria-label="Prompt">
+              <div class="panel__header">
+                <div>
+                  <div class="panel__title">Welcome to Landry!</div>
+                  <div class="panel__subtitle">Create your prompt below:</div>
+                </div>
+                <div class="pill">
+                  <span class="pill__label">Active Model</span>
+                  <span id="active-model" class="pill__value">—</span>
+                </div>
+              </div>
+
+              <div class="field">
+                <div class="row row--between">
+                  <label class="label" for="prompt">Your Prompt</label>
+                  <div class="row">
+                    <button id="preset-beginner" class="btn btn--tiny">Beginner</button>
+                    <button id="preset-creative" class="btn btn--tiny btn--ghost">Creative</button>
+                  </div>
+                </div>
+                <textarea id="prompt" class="textarea" rows="12" placeholder="Ask anything… e.g., 'Explain what a prompt is like I’m brand new, then give me 3 examples.'"></textarea>
+              </div>
+
+              <div class="row">
+                <button id="generate-btn" class="btn btn--primary">Generate Response</button>
+                <button id="stop-btn" class="btn btn--ghost" disabled>Stop</button>
+                <button id="clear-btn" class="btn btn--ghost">Clear</button>
+              </div>
+
+              <div class="muted">Streaming output is chunked (25–50ms) to keep the UI smooth.</div>
+            </section>
+
+            <!-- RIGHT: Response -->
+            <aside class="panel frame" aria-label="Response">
+              <div class="panel__header">
+                <div>
+                  <div class="panel__title">Response Output</div>
+                  <div class="panel__subtitle">AI Response</div>
+                </div>
+                <div id="gen-status" class="badge">Idle</div>
+              </div>
+
+              <div id="response" class="response" role="region" aria-live="polite"></div>
+
+              <div class="mini-grid">
+                <div class="mini">
+                  <div class="mini__label">Response Length</div>
+                  <div id="token-count" class="mini__value">— tokens</div>
+                </div>
+                <div class="mini">
+                  <div class="mini__label">Regeneration Options</div>
+                  <div class="mini__value">
+                    <button id="retry-btn" class="link">Retry</button>
+                    <span class="sep">|</span>
+                    <button id="edit-btn" class="link">Edit Output</button>
+                  </div>
+                </div>
+                <div class="mini">
+                  <div class="mini__label">Download Result</div>
+                  <div class="mini__value">
+                    <button id="copy-btn" class="link">Copy</button>
+                    <span class="sep">|</span>
+                    <button id="download-btn" class="link">Download</button>
+                  </div>
+                </div>
+              </div>
+            </aside>
+          </div>
+
+          <section class="tips frame" aria-label="Tips for Beginners">
+            <div class="tips__header">Tips for Beginners</div>
+            <div class="tips__grid">
+              <div class="tip-card">
+                <div class="tip-card__title">Keep It Clear</div>
+                <div class="tip-card__text">Say what you want, who it’s for, and the format you’d like.</div>
+              </div>
+              <div class="tip-card">
+                <div class="tip-card__title">Be Creative</div>
+                <div class="tip-card__text">Try roles (“act as…”), constraints, and examples to guide the model.</div>
+              </div>
+              <div class="tip-card">
+                <div class="tip-card__title">Adjust &amp; Refine</div>
+                <div class="tip-card__text">Use Retry, tweak temperature, or ask for a simpler explanation.</div>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section id="screen-history" class="screen">
+          <div class="panel frame" style="min-height: 60vh">
+            <div class="panel__header">
+              <div>
+                <div class="panel__title">History</div>
+                <div class="panel__subtitle">Your past prompts &amp; outputs.</div>
+              </div>
+              <button id="history-refresh" class="btn btn--ghost">Refresh</button>
+            </div>
+
+            <div class="history">
+              <div class="history__list" id="history-list"></div>
+              <div class="history__detail" id="history-detail">
+                <div class="muted">Select a run on the left to view details.</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="screen-settings" class="screen">
+          <div class="panel frame" style="min-height: 60vh">
+            <div class="panel__header">
+              <div>
+                <div class="panel__title">Settings</div>
+                <div class="panel__subtitle">Hugging Face token, defaults, and sampling presets.</div>
+              </div>
+              <button id="settings-save" class="btn btn--primary">Save</button>
+            </div>
+
+            <div class="settings">
+              <div class="field">
+                <label class="label" for="hf-token">Hugging Face Token (optional)</label>
+                <input id="hf-token" class="input" placeholder="hf_… (needed for gated models)" />
+                <div class="muted">We store this locally in your app data folder.</div>
+              </div>
+
+              <div class="field">
+                <div class="label">Defaults</div>
+                <div class="row">
+                  <div class="field" style="flex: 1">
+                    <label class="label" for="default-repo">Default Model Repo</label>
+                    <input id="default-repo" class="input" placeholder="bartowski/Phi-3-mini-4k-instruct-v0.3-GGUF" />
+                  </div>
+                  <div class="field" style="width: 220px">
+                    <label class="label" for="default-quant">Default Quant Hint</label>
+                    <input id="default-quant" class="input" placeholder="Q5" />
+                  </div>
+                </div>
+              </div>
+
+              <div class="divider"></div>
+
+              <div class="field">
+                <div class="label">Sampling (Beginner Preset)</div>
+                <div class="row">
+                  <div class="field" style="width: 180px">
+                    <label class="label" for="temp">Temperature</label>
+                    <input id="temp" class="input" type="number" step="0.05" min="0" max="2" />
+                  </div>
+                  <div class="field" style="width: 180px">
+                    <label class="label" for="topP">Top‑p</label>
+                    <input id="topP" class="input" type="number" step="0.05" min="0" max="1" />
+                  </div>
+                  <div class="field" style="width: 180px">
+                    <label class="label" for="topK">Top‑k</label>
+                    <input id="topK" class="input" type="number" step="1" min="0" max="200" />
+                  </div>
+                  <div class="field" style="width: 180px">
+                    <label class="label" for="maxTokens">Max Tokens</label>
+                    <input id="maxTokens" class="input" type="number" step="32" min="32" max="4096" />
+                  </div>
+                </div>
+              </div>
+
+              <div class="muted">Advanced tuning (stop sequences, repetition penalties) is kept simple for this MVP.</div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <div id="toast-root" class="toast-root" aria-live="polite" aria-relevant="additions"></div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
