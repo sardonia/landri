@@ -4,7 +4,7 @@ use tauri::State;
 
 use crate::{
     domain::{GenerateRequest, HfFile, HfModelSummary, InstalledModel, Settings},
-    error::{AppError, AppResult},
+    error::AppError,
     state::AppState,
 };
 

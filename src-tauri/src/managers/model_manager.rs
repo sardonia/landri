@@ -42,54 +42,58 @@ impl ModelManager {
         }
     }
 
-    pub async fn start_download(&self, repo_id: String, filename: String, hf_token: Option<String>) -> AppResult<String> {
-        let (job_id, cancel) = self.job_manager.create_job().await;
+pub async fn start_download(&self, repo_id: String, filename: String, hf_token: Option<String>) -> AppResult<String> {
+    let (job_id, cancel) = self.job_manager.create_job().await;
+    let job_id_ret = job_id.clone();
 
-        let hf = self.hf.clone();
-        let registry = self.registry.clone();
-        let events = self.events.clone();
-        let models_dir = self.models_dir.clone();
-        let jm = self.job_manager.clone();
+    let hf = self.hf.clone();
+    let registry = self.registry.clone();
+    let events = self.events.clone();
+    let models_dir = self.models_dir.clone();
+    let jm = self.job_manager.clone();
 
-        tokio::spawn(async move {
-            let res = download_flow(
-                &job_id,
-                &repo_id,
-                &filename,
-                hf_token.as_deref(),
-                cancel.clone(),
-                hf,
-                registry,
-                events,
-                models_dir,
-            )
-            .await;
+    tokio::spawn(async move {
+        let events_for_flow = events.clone();
+        let res = download_flow(
+            &job_id,
+            &repo_id,
+            &filename,
+            hf_token.as_deref(),
+            cancel.clone(),
+            hf,
+            registry,
+            events_for_flow,
+            models_dir,
+        )
+        .await;
 
-            if let Err(err) = res {
-                let toast = match err {
-                    AppError::Cancelled => ToastEvent {
-                        title: "Download cancelled".to_string(),
-                        message: "The download was cancelled.".to_string(),
-                        detail: Some(format!("{repo_id} / {filename}")),
-                        remediation: Some("You can restart the download any time.".to_string()),
-                        kind: "info".to_string(),
-                    },
-                    _ => ToastEvent {
-                        title: "Download failed".to_string(),
-                        message: "Unable to download the model.".to_string(),
-                        detail: Some(err.to_string()),
-                        remediation: Some("Check your internet connection and (if needed) your Hugging Face token in Settings.".to_string()),
-                        kind: "error".to_string(),
-                    },
-                };
-                let _ = emit_ser(events.as_ref(), EVENT_TOAST_ERROR, &toast);
-            }
+        if let Err(err) = res {
+            let toast = match err {
+                AppError::Cancelled => ToastEvent {
+                    title: "Download cancelled".to_string(),
+                    message: "The download was cancelled.".to_string(),
+                    detail: Some(format!("{repo_id} / {filename}")),
+                    remediation: Some("You can restart the download any time.".to_string()),
+                    kind: "info".to_string(),
+                },
+                _ => ToastEvent {
+                    title: "Download failed".to_string(),
+                    message: "Unable to download the model.".to_string(),
+                    detail: Some(err.to_string()),
+                    remediation: Some(
+                        "Check your internet connection and (if needed) your Hugging Face token in Settings.".to_string(),
+                    ),
+                    kind: "error".to_string(),
+                },
+            };
+            let _ = emit_ser(events.as_ref(), EVENT_TOAST_ERROR, &toast);
+        }
 
-            jm.remove(&job_id).await;
-        });
+        jm.remove(&job_id).await;
+    });
 
-        Ok(job_id)
-    }
+    Ok(job_id_ret)
+}
 
     pub fn models_dir(&self) -> &Path {
         &self.models_dir

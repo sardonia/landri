@@ -61,7 +61,10 @@ impl GenerationOrchestrator {
 
         let (job_id, cancel) = self.jobs.create_job().await;
 
-        let events = self.events.clone();
+        
+        let job_id_ret = job_id.clone();
+        let hf_token_owned: Option<String> = hf_token.map(|s| s.to_string());
+let events = self.events.clone();
         let history = self.history.clone();
         let inference = self.inference.clone();
         let jobs = self.jobs.clone();
@@ -89,7 +92,7 @@ impl GenerationOrchestrator {
             let total_chars: Arc<Mutex<u64>> = Arc::new(Mutex::new(0));
 
             // Ensure model loaded.
-            if let Err(e) = inference.ensure_model_loaded(&installed, hf_token).await {
+            if let Err(e) = inference.ensure_model_loaded(&installed, hf_token_owned.as_deref()).await {
                 let _ = emit_ser(
                     events.as_ref(),
                     EVENT_TOAST_ERROR,
@@ -232,6 +235,6 @@ impl GenerationOrchestrator {
             jobs.remove(&job_id).await;
         });
 
-        Ok(job_id)
+        Ok(job_id_ret)
     }
 }

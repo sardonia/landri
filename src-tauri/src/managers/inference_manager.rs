@@ -138,32 +138,56 @@ impl InferencePort for InferenceManager {
                 next = stream.next() => {
                     match next {
                         Some(resp) => match resp {
-                            Response::Chunk(chunk) => {
-                                if let Some(choice) = chunk.choices.first() {
-                                    if let Some(content) = choice.delta.content.as_ref() {
-                                        buffer.push_str(content);
+    Response::Chunk(chunk) => {
+        if let Some(choice) = chunk.choices.first() {
+            if let Some(content) = choice.delta.content.as_ref() {
+                buffer.push_str(content);
 
-                                        let should_flush = buffer.len() >= 120 || last_emit.elapsed() >= Duration::from_millis(50);
-                                        if should_flush {
-                                            on_text(buffer.clone());
-                                            buffer.clear();
-                                            last_emit = Instant::now();
-                                        }
-                                    }
-                                }
-                            }
-                            Response::Done(_done) => {
-                                if !buffer.is_empty() {
-                                    on_text(buffer.clone());
-                                    buffer.clear();
-                                }
-                                break;
-                            }
-                            Response::ModelError(e, _extra) => {
-                                return Err(AppError::Inference(e));
-                            }
-                        },
-                        None => break,
+                let should_flush = buffer.len() >= 120 || last_emit.elapsed() >= Duration::from_millis(50);
+                if should_flush {
+                    on_text(buffer.clone());
+                    buffer.clear();
+                    last_emit = Instant::now();
+                }
+            }
+        }
+    }
+    Response::Done(_done) => {
+        if !buffer.is_empty() {
+            on_text(buffer.clone());
+            buffer.clear();
+        }
+        break;
+    }
+    Response::ModelError(e, _extra) => {
+        return Err(AppError::Inference(e));
+    }
+    // Newer mistralrs variants
+    Response::InternalError(e) => {
+        return Err(AppError::Inference(e.to_string()));
+    }
+    Response::ValidationError(e) => {
+        return Err(AppError::Inference(e.to_string()));
+    }
+    Response::CompletionModelError(e, _extra) => {
+        return Err(AppError::Inference(e));
+    }
+    Response::CompletionDone(_done) => {
+        if !buffer.is_empty() {
+            on_text(buffer.clone());
+            buffer.clear();
+        }
+        break;
+    }
+    Response::CompletionChunk(_chunk) => {
+        // Not used for chat streaming; ignore.
+    }
+    other => {
+        // Be resilient to enum growth: treat unexpected variants as a soft error.
+        return Err(AppError::Inference(format!("Unsupported inference response variant")));
+    }
+},
+None => break,
                     }
                 }
             }
